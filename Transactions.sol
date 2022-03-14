@@ -1,19 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0
 
-pragma solidity >=0.7.0 <0.9.0;
+pragma solidity ^0.8.0;
+
+import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+import "./AddressManagement.sol";
 
 /**
  * @title Transactions
  * @dev Log the transaction records of the collateralized loan
  */
-contract Transactions {
+contract Transactions is AddressManagement {
 
-    // address addressManagement;
-
-    // constructor(address _addressManagement) {
-    //     addressManagement = _addressManagement;
-    // }
-
+    constructor(address admin_) AddressManagement(admin_) { }
+    
     /**
      * @dev Trigger the event when Ether balance of an wallet address is initiated
      */
@@ -83,11 +82,6 @@ contract Transactions {
      * @dev Balance of fiat money to be tracked in the smart contract
      */
     mapping(address => uint256) fiatBalances;
-    
-    /**
-     * @dev Indicator to check if the Ether balance of an account has been initiated
-     */
-    mapping(address => bool) createdEtherBalances;
 
     /**
      * @dev Place for storing the collateral, loanId => collateralValue
@@ -116,9 +110,7 @@ contract Transactions {
      * @dev Authenticate the address of the sender, see if it is coming from the Collateralized Loan Gateway
      */
     modifier AuthenticateSender {
-        address addressManagement = 0x54698d5ff8C093Cb051631982D12B718b28c95f7;
-        (, bytes memory result) = addressManagement.call(abi.encodeWithSignature("getContractAddress(string)", "CollateralizedLoanGateway"));
-        require(msg.sender == abi.decode(result, (address)));
+        require(msg.sender == super.getContractAddress("CollateralizedLoanGateway"));
         _;
     }
 
@@ -136,34 +128,13 @@ contract Transactions {
     }
     
     /**
-     * @dev Initiate the Ether balance of an account if it is not created before
-     * @param _address Address of the account to be initiated
-     */
-    function initiateEtherBalance(address _address) internal
-    AuthenticateSender returns(bool)
-    {
-        if(!createdEtherBalances[_address]) {
-            etherBalances[_address] = 0;
-            createdEtherBalances[_address] = true;
-            emit EtherBalanceInitiated(_address);
-            return true;
-        }
-        return false;
-    }
-    
-    /**
      * @dev Store Ether to the account if it is created before
      * @param _address Address of the account
      */
     function storeEther(address _address, uint256 _value) external payable
     AuthenticateSender
     {
-        if(createdEtherBalances[_address]) {
-            etherBalances[_address] += _value;
-        } else {
-            initiateEtherBalance(_address);
-            etherBalances[_address] += _value;
-        }
+        etherBalances[_address] += _value;
         emit EtherStored(_address, _value);
     }
     
@@ -187,7 +158,7 @@ contract Transactions {
     function withdrawEther(address payable _address, uint256 _value) external payable
     AuthenticateSender
     {
-        if(createdEtherBalances[_address] && etherBalances[_address] >= _value) {
+        if(etherBalances[_address] >= _value) {
             etherBalances[_address] -= _value;
             transferEther(_address, _value);
             emit EtherWithdrawn(_address, _value);
@@ -216,7 +187,7 @@ contract Transactions {
      * @dev Check the last account balance in Ether
      * @param _address Address of the account
      */
-    function checkEtherBalanceAmount(address _address) external
+    function checkEtherBalanceAmount(address _address) external view
     AuthenticateSender returns(uint256)
     {
         return etherBalances[_address];
@@ -226,7 +197,7 @@ contract Transactions {
      * @dev Check the last account balance in fiat money
      * @param _address Address of the account
      */
-    function checkFiatBalanceAmount(address _address) external
+    function checkFiatBalanceAmount(address _address) external view
     AuthenticateSender returns(uint256)
     {
         return fiatBalances[_address];
@@ -265,6 +236,7 @@ contract Transactions {
     /**
      * @dev Transfer Ether from contract to wallet address
      * @param _to Address of the receiver of Ether
+     * @param _value Value of Ether to be transferred (in wei)
      */
     function transferEther(address payable _to, uint256 _value) public payable
     AuthenticateSender
@@ -302,8 +274,30 @@ contract Transactions {
         emit EtherReleasedFromVault(_address, _loanId, _collateralAmount);
     }
 
+    /**
+     * @dev Get collateral value from collateral vault
+     * @param _loanId Id of the loan
+     */
+    function getCollateralValueFromVault(uint256 _loanId) external view
+    AuthenticateSender
+    returns (uint256)
+    {
+        return collateralVault[_loanId];
+    }
+
+    /**
+     * @dev Deduct collateral value from collateral vault
+     * @param _loanId Id of the loan
+     * @param _collateralAmount Collateral amount to be deducted
+     */
+    function deductCollateralValueFromVault(uint256 _loanId, uint256 _collateralAmount) external
+    AuthenticateSender
+    {
+        collateralVault[_loanId] -= _collateralAmount;
+    }
+
     /* For testing */
-    function add2(uint a, uint b) external
+    function add2(uint a, uint b) external view
     AuthenticateSender
     returns (uint256) {
         return a + b;

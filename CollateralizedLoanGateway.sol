@@ -1,16 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0
 
-pragma solidity >=0.7.0 <0.9.0;
+pragma solidity ^0.8.0;
 
-import './LoanStructure.sol';
+import "./LoanStructure.sol";
+import "./AddressManagement.sol";
 
-contract CollateralizedLoanGateway {
+contract CollateralizedLoanGateway is AddressManagement {
     address collateralizedLoanProxy;
     address payable transactionsProxy;
     address addressManagement;
     address airnodeAdmin;
 
-    constructor(address _collateralizedLoanProxy, address payable _transactionsProxy, address _addressManagement, address _airnodeAdmin) {
+    constructor(address _collateralizedLoanProxy, address payable _transactionsProxy, address _addressManagement, address _airnodeAdmin, address admin_) AddressManagement(admin_) {
         collateralizedLoanProxy = _collateralizedLoanProxy;
         transactionsProxy = _transactionsProxy;
         addressManagement = _addressManagement;
@@ -40,27 +41,12 @@ contract CollateralizedLoanGateway {
     /**
      * @dev Trigger the event when agreement of the collateralized loan is made
      */
-    event LoanInitiated(uint256 _loanId, address _lender, uint256 _initiatedime);
+    event LoanInitiated(uint256 _loanId, address _lender, uint256 _initiatedTime);
 
     /**
      * @dev Trigger the event when borrower raised a request for loan
      */
-    event LoanRequested(uint256 _loanId, address _requester, uint256 _initiatedime);
-
-    /**
-     * @dev Trigger the event when agreement of the collateralized loan is made
-     */
-    event LoanAgreed(uint256 _loanId, address _borrower, address _lender, uint256 _agreedTime);
-    
-    /**
-     * @dev Trigger the event when ether is deposited by borrower as collateral
-     */
-    event EtherDepositedACK(uint256 _loanId, address _borrower, uint256 _ethValue, uint256 _ackTime);
-
-    /**
-     * @dev Trigger the event when loan amount is deposited by lender
-     */
-    event LoanDepositedACK(uint256 _loanId, address _lender, uint256 _loanValue, uint256 _ackTime);
+    event LoanRequested(uint256 _loanId, address _requester, uint256 _requestedTime);
 
     /**
      * @dev Trigger the event when the loan is cancelled
@@ -70,17 +56,17 @@ contract CollateralizedLoanGateway {
     /**
      * @dev Trigger the event when loan is disbursed to borrower
      */
-    event LoanDisbursed(uint256 _loanId, address _lender, uint256 _disburseTime);
+    event LoanDisbursed(uint256 _loanId, address _lender, uint256 _nextRepaymentDeadline, uint256 _disburseTime);
 
     /**
      * @dev Trigger the event when repayment is made by the borrower
      */
-    event RepaymentMadeByBorrower(uint256 _loanId, address _borrower, uint256 _repaidTime);
+    event LoanRepaid(uint256 _loanId, address _borrower, uint256 _repaidTime);
 
     /**
      * @dev Trigger the event when borrower defaults on a particular loan
      */
-    event BorrowerDefaults(uint256 _loanId, address _borrower, uint256 _checkTime);
+    event LoanDefaulted(uint256 _loanId, address _borrower, uint256 _checkTime);
 
     /**
      * @dev Trigger the event when borrower defaults and collateralized ether is sent to the lender
@@ -90,14 +76,14 @@ contract CollateralizedLoanGateway {
     /**
      * @dev Trigger the event when borrower has fully repaid the loan
      */
-    event FullLoanRepaid(uint256 _loanId, uint256 _checkTime);
+    event LoanFullyRepaid(uint256 _loanId, address _borrower, uint256 _repaidTime);
 
     /**
      * @dev Trigger the event when collateral is paid back to the borrower
      */
     event CollateralPaidback(uint256 _loanId, address _borrower, uint256 _paidTime);
     
-        /**
+    /**
      * @dev Trigger the event when Ether balance of an wallet address is initiated
      */
     event EtherBalanceInitiated(address _address);
@@ -157,6 +143,38 @@ contract CollateralizedLoanGateway {
      */
     event EtherReleasedFromVault(address _address, uint256 _loanId, uint256 _value);
 
+    function getCollateralizedLoanProxy() external view isAdmin returns (address) {
+        return collateralizedLoanProxy;
+    }
+
+    function getTransactionsProxy() external view isAdmin returns (address) {
+        return transactionsProxy;
+    }
+
+    function getAddressManagement() external view isAdmin returns (address) {
+        return addressManagement;
+    }
+
+    function getAirnodeAdmin() external view isAdmin returns (address) {
+        return airnodeAdmin;
+    }
+
+    function changeCollateralizedLoanProxy(address _collateralizedLoanProxy) external isAdmin {
+        collateralizedLoanProxy = _collateralizedLoanProxy;
+    }
+
+    function changeTransactionsProxy(address payable _transactionsProxy) external isAdmin {
+        transactionsProxy = _transactionsProxy;
+    }
+
+    function changeAddressManagement(address _addressManagement) external isAdmin {
+        addressManagement = _addressManagement;
+    }
+
+    function changeAirnodeAdmin(address _airnodeAdmin) external isAdmin {
+        airnodeAdmin = _airnodeAdmin;
+    }
+
     function functionCallToCollateralizedLoanProxy(bytes memory payload) internal returns (bytes memory)
     {
         (bool success, bytes memory returnData) = collateralizedLoanProxy.call(payload);
@@ -174,11 +192,11 @@ contract CollateralizedLoanGateway {
     /**
         Endpoints from CollateralizedLoan
      */
-    function initiateLoan(address _lender, uint256 _loanAmount, uint256 _collateralAmount, uint256 _loanTerm, uint256 _apr, uint256 _repaymentSchedule, uint256 _monthlyRepayment, uint256 _remainingPaymentCount)
+    function initiateLoan(address _lender, uint256 _loanAmount, uint256 _collateralAmount, uint256 _loanTerm, uint256 _apr, uint256 _repaymentSchedule, uint256 _monthlyRepayment, uint256 _remainingPaymentCount, uint256 _ltv, uint256 _marginLTV, uint256 _liquidationLTV)
     AuthenticateSender(_lender)
     external
     {
-        bytes memory payload = abi.encodeWithSignature("initiateLoan(address,uint256,uint256,uint256,uint256,uint256,uint256,uint256)", _lender, _loanAmount, _collateralAmount, _loanTerm, _apr, _repaymentSchedule, _monthlyRepayment, _remainingPaymentCount);
+        bytes memory payload = abi.encodeWithSignature("initiateLoan(address,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)", _lender, _loanAmount, _collateralAmount, _loanTerm, _apr, _repaymentSchedule, _monthlyRepayment, _remainingPaymentCount, _ltv, _marginLTV, _liquidationLTV);
         uint256 newLoanId = abi.decode(functionCallToCollateralizedLoanProxy(payload), (uint256));
         emit LoanInitiated(newLoanId, _lender, block.timestamp);
     }
@@ -192,43 +210,6 @@ contract CollateralizedLoanGateway {
         functionCallToCollateralizedLoanProxy(payload);
         
         emit LoanRequested(_loanId, _requester, block.timestamp);
-    }
-
-    function agreeLoan(address _lender, uint256 _loanId, address _borrower)
-    AuthenticateSender(_lender)
-    external
-    {
-        bytes memory payload = abi.encodeWithSignature("agreeLoan(address,uint256,address)", _lender, _loanId, _borrower);
-
-        functionCallToCollateralizedLoanProxy(payload);
-
-        emit LoanAgreed(_loanId, _borrower, _lender, block.timestamp);
-    }
-
-    function ackEthDeposit(address _borrower, uint256 _loanId)
-    AuthenticateSender(_borrower)
-    external
-    {
-        uint256 _ethBalance = checkEtherBalanceAmount(_borrower);
-        
-        bytes memory payload = abi.encodeWithSignature("ackEthDeposit(address,uint256,uint256)", msg.sender, _loanId, _ethBalance);
-
-        functionCallToCollateralizedLoanProxy(payload);
-
-        emit EtherDepositedACK(_loanId, _borrower, _ethBalance, block.timestamp);
-    }
-
-    function ackLoan(address _lender, uint256 _loanId, uint256 _loanValue)
-    AuthenticateSender(_lender)
-    external
-    {
-        uint256 _lenderFiatBalance = checkFiatBalanceAmount(_lender);
-
-        bytes memory payload = abi.encodeWithSignature("ackLoan(address,uint256,uint256,uint256)", msg.sender, _loanId, _loanValue, _lenderFiatBalance);
-
-        functionCallToCollateralizedLoanProxy(payload);
-
-        emit LoanDepositedACK(_loanId, _lender, _loanValue, block.timestamp);
     }
 
     function cancelLoan(address _lender, uint256 _loanId)
@@ -247,8 +228,22 @@ contract CollateralizedLoanGateway {
         bytes memory payload1 = abi.encodeWithSignature("getLoanDetails(uint256)", _loanId);
         LoanStructure.Loan memory loan = abi.decode(functionCallToCollateralizedLoanProxy(payload1), (LoanStructure.Loan));
 
+        bytes memory payload1a = abi.encodeWithSignature("checkFiatBalanceAmount(address)", loan.lender);
+        uint256 lenderFiatBalance = abi.decode(functionCallToTransactionsProxy(payload1a), (uint256));
+        
+        bytes memory payload1b = abi.encodeWithSignature("checkEtherBalanceAmount(address)", loan.borrower);
+        uint256 borrowerEtherBalance = abi.decode(functionCallToTransactionsProxy(payload1b), (uint256));
+
         if(_lender != loan.lender) {
             revert("Loan is not disbursed by the loan lender");
+        }
+
+        if(lenderFiatBalance < uint256(loan.loanAmount)) {
+            revert("Lender does not have enough fiat balance");
+        }
+
+        if(borrowerEtherBalance < uint256(loan.collateralAmount)) {
+            revert("Borrower does not have enough Ether balance");
         }
 
         bytes memory payload2 = abi.encodeWithSignature("transferFiatMoneyToAnotherAddress(address,address,uint256)", loan.lender, loan.borrower, uint(loan.loanAmount));
@@ -264,7 +259,7 @@ contract CollateralizedLoanGateway {
         bytes memory payload4 = abi.encodeWithSignature("updateDisbursedLoanDetails(address,uint256,uint256)", _lender, _loanId, _nextRepaymentDeadline);
         functionCallToCollateralizedLoanProxy(payload4);
 
-        emit LoanDisbursed(_loanId, _lender, block.timestamp);
+        emit LoanDisbursed(_loanId, _lender, _nextRepaymentDeadline, block.timestamp);
     }
 
     function makeRepaymentByBorrower(address _borrower, uint256 _loanId, uint256 _payValue, uint256 _nextRepaymentDeadline)
@@ -282,12 +277,19 @@ contract CollateralizedLoanGateway {
             revert("Repayment is not made by the loan borrower");
         }
 
+        bytes memory payload1a = abi.encodeWithSignature("checkFiatBalanceAmount(address)", loan.borrower);
+        uint256 borrowerFiatBalance = abi.decode(functionCallToTransactionsProxy(payload1a), (uint256));
+
+        if(borrowerFiatBalance < uint256(loan.monthlyRepaymentAmount)) {
+            revert("Borrower does not have enough fiat balance");
+        }
+
         bytes memory payload2 = abi.encodeWithSignature("transferFiatMoneyToAnotherAddress(address,address,uint256)", loan.borrower, loan.lender, _payValue);
         functionCallToTransactionsProxy(payload2);
 
         emit FiatMoneyTransferredBetweenAddress(loan.borrower, loan.lender, _payValue);
 
-        bytes memory payload3 = abi.encodeWithSignature("updateNextLoanRepayment(uint256,uint256)", _loanId, _nextRepaymentDeadline);
+        bytes memory payload3 = abi.encodeWithSignature("updateNextLoanRepaymentDetails(uint256,uint256)", _loanId, _nextRepaymentDeadline);
         bool isFullyRepaid = abi.decode(functionCallToCollateralizedLoanProxy(payload3), (bool));
 
         if(isFullyRepaid) {
@@ -296,39 +298,112 @@ contract CollateralizedLoanGateway {
 
             emit EtherReleasedFromVault(_borrower, _loanId, uint(loan.collateralAmount));
 
-            // bytes memory payload5 = abi.encodeWithSignature("recordFullRepaymentEvent(uint256)", _loanId);
-            // functionCallToCollateralizedLoanProxy(payload5);
-
-            emit FullLoanRepaid(_loanId, block.timestamp);
+            emit LoanFullyRepaid(_loanId, loan.borrower, block.timestamp);
         } else {
-            // bytes memory payload4 = abi.encodeWithSignature("recordRepaymentEvent(address,uint256)", loan.borrower, _loanId);
-            // functionCallToCollateralizedLoanProxy(payload4);
-
-            emit RepaymentMadeByBorrower(_loanId, _borrower, block.timestamp);
+            emit LoanRepaid(_loanId, _borrower, block.timestamp);
         }
     }
 
     // Scheduled batch job for checking the defaulted loans
-    function checkBorrowerDefault(uint256 _loanId) external
+    function checkBorrowerDefault(uint256 _nextRepaymentDeadline) external
     AuthenticateAirnodeAdmin
     {
-        bytes memory payload1 = abi.encodeWithSignature("checkBorrowerDefault(uint256)", _loanId);
-        bool isDefaulted = abi.decode(functionCallToCollateralizedLoanProxy(payload1), (bool));
-
-        if(isDefaulted) {
-            bytes memory payload2 = abi.encodeWithSignature("getLoanDetails(uint256)", _loanId);
+        bytes memory payload1 = abi.encodeWithSignature("getDefaultedLoanIds(uint256)", _nextRepaymentDeadline);
+        uint256[] memory defaultedLoanIds = abi.decode(functionCallToCollateralizedLoanProxy(payload1), (uint256[]));
+        for(uint256 i = 0; i < defaultedLoanIds.length; i++) {
+            bytes memory payload2 = abi.encodeWithSignature("getLoanDetails(uint256)", defaultedLoanIds[i]);
             LoanStructure.Loan memory loan = abi.decode(functionCallToCollateralizedLoanProxy(payload2), (LoanStructure.Loan));
             
-            bytes memory payload3 = abi.encodeWithSignature("releaseCollateralFromVault(address,uint256,uint256)", loan.lender, _loanId, uint(loan.collateralAmount));
+            bytes memory payload3 = abi.encodeWithSignature("releaseCollateralFromVault(address,uint256,uint256)", loan.lender, defaultedLoanIds[i], uint(loan.collateralAmount));
             functionCallToTransactionsProxy(payload3);
 
-            emit EtherReleasedFromVault(loan.lender, _loanId, uint(loan.collateralAmount));
+            emit EtherReleasedFromVault(loan.lender, defaultedLoanIds[i], uint(loan.collateralAmount));
 
-            // bytes memory payload4 = abi.encodeWithSignature("recordLoanDefaultEvent(uint256)", _loanId);
-            // functionCallToCollateralizedLoanProxy(payload4);
+            bytes memory payload4 = abi.encodeWithSignature("recordLoanDefaultEvent(uint256)", defaultedLoanIds[i]);
+            functionCallToCollateralizedLoanProxy(payload4);
 
-            emit BorrowerDefaults(_loanId, loan.borrower, block.timestamp);
-            emit CollateralSentToLender(_loanId, loan.lender, block.timestamp);
+            emit LoanDefaulted(defaultedLoanIds[i], loan.borrower, block.timestamp);
+            emit CollateralSentToLender(defaultedLoanIds[i], loan.lender, block.timestamp);
+        }
+    }
+
+    function recordLoanDefaultEvent(uint256 _loanId) external
+    AuthenticateAirnodeAdmin
+    {
+        bytes memory payload1 = abi.encodeWithSignature("getLoanDetails(uint256)", _loanId);
+        LoanStructure.Loan memory loan = abi.decode(functionCallToCollateralizedLoanProxy(payload1), (LoanStructure.Loan));
+
+        if(loan.loanStatus != LoanStructure.LoanStatus.LoanRepaying) {
+            revert("Loan is not at LoanRepaying status");
+        }
+
+        bytes memory payload2 = abi.encodeWithSignature("recordLoanDefaultEvent(uint256)", _loanId);
+        functionCallToCollateralizedLoanProxy(payload2);
+
+        emit LoanDefaulted(_loanId, loan.borrower, block.timestamp);
+    }
+
+    function recordLoanFullyRepaidEvent(uint256 _loanId) external
+    AuthenticateAirnodeAdmin
+    {
+        bytes memory payload1 = abi.encodeWithSignature("getLoanDetails(uint256)", _loanId);
+        LoanStructure.Loan memory loan = abi.decode(functionCallToCollateralizedLoanProxy(payload1), (LoanStructure.Loan));
+
+        if(loan.loanStatus != LoanStructure.LoanStatus.LoanRepaying) {
+            revert("Loan is not at LoanRepaying status");
+        }
+
+        bytes memory payload2 = abi.encodeWithSignature("recordLoanFullyRepaidEvent(uint256)", _loanId);
+        functionCallToCollateralizedLoanProxy(payload2);
+
+        emit LoanFullyRepaid(_loanId, loan.borrower, block.timestamp);
+    }
+
+    // Scheduled batch job for liquidating loans
+    function liquidateLoan(uint256[] memory loanIds, uint256[] memory collateralInUSD, uint256[] memory collateralPayables) external
+    AuthenticateAirnodeAdmin
+    {
+        for(uint256 i = 0; i < loanIds.length; i++) {
+            bytes memory payload1 = abi.encodeWithSignature("getLoanDetails(uint256)", loanIds[i]);
+            LoanStructure.Loan memory loan = abi.decode(functionCallToCollateralizedLoanProxy(payload1), (LoanStructure.Loan));
+            
+            uint256 grossRemainingRepaymentAmount = loan.remainingRepaymentCount * loan.monthlyRepaymentAmount;
+            
+            bytes memory payload2 = abi.encodeWithSignature("getCollateralValueFromVault(uint256)", loanIds[i]);
+            uint256 collateralAmount = abi.decode(functionCallToTransactionsProxy(payload2), (uint256));
+            
+            if(collateralInUSD[i] >= grossRemainingRepaymentAmount) {
+                // Set loan as fully repaid, transfer grossRemainingRepaymentAmount to lender
+                // and send remaining amount (collateralAmount - grossRemainingRepaymentAmount) to borrower
+
+                bytes memory payload3 = abi.encodeWithSignature("deductCollateralValueFromVault(uint256,uint256)", loanIds[i], collateralAmount);
+                functionCallToTransactionsProxy(payload3);
+
+                bytes memory payload4 = abi.encodeWithSignature("storeFiatMoney(address,uint256)", loan.lender, grossRemainingRepaymentAmount);
+                functionCallToTransactionsProxy(payload4);
+
+                bytes memory payload5 = abi.encodeWithSignature("transferEther(address,uint256)", loan.borrower, collateralPayables[i]);
+                functionCallToTransactionsProxy(payload5);
+                emit EtherTransferred(loan.borrower, collateralPayables[i] * 1 wei);
+
+                bytes memory payload6 = abi.encodeWithSignature("recordLoanFullyRepaidEvent(uint256)", loanIds[i]);
+                functionCallToCollateralizedLoanProxy(payload6);
+
+                emit LoanFullyRepaid(loanIds[i], loan.borrower, block.timestamp);
+            } else {
+                // Set loan as defaulted and send collateral to lender
+
+                bytes memory payload3 = abi.encodeWithSignature("releaseCollateralFromVault(address,uint256,uint256)", loan.lender, loanIds[i], uint(loan.collateralAmount));
+                functionCallToTransactionsProxy(payload3);
+
+                emit EtherReleasedFromVault(loan.lender, loanIds[i], uint(loan.collateralAmount));
+
+                bytes memory payload4 = abi.encodeWithSignature("recordLoanDefaultEvent(uint256)", loanIds[i]);
+                functionCallToCollateralizedLoanProxy(payload4);
+
+                emit LoanDefaulted(loanIds[i], loan.borrower, block.timestamp);
+                emit CollateralSentToLender(loanIds[i], loan.lender, block.timestamp);
+            }
         }
     }
 
@@ -347,14 +422,6 @@ contract CollateralizedLoanGateway {
         return abi.decode(functionCallToCollateralizedLoanProxy(payload), (LoanStructure.Loan[]));
     }
 
-    // function getLenderLoansLength(address _lender) external
-    // AuthenticateSender(_lender)
-    // returns (uint256)
-    // {
-    //     bytes memory payload = abi.encodeWithSignature("getLenderLoansLength(address)", _lender);
-    //     return abi.decode(functionCallToCollateralizedLoanProxy(payload), (uint256));
-    // }
-
     function getBorrowerLoans(address _borrower) external
     AuthenticateSender(_borrower)
     returns (LoanStructure.Loan[] memory)
@@ -370,7 +437,7 @@ contract CollateralizedLoanGateway {
     function storeEther(address payable _address) public payable
     AuthenticateSender(_address)
     {
-        // transactionsProxy.transfer(msg.value);
+        transactionsProxy.transfer(msg.value);
         bytes memory payload = abi.encodeWithSignature("storeEther(address,uint256)", _address, msg.value);
         functionCallToTransactionsProxy(payload);
         emit EtherStored(_address, msg.value);

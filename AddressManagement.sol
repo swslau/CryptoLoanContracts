@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0
 
-pragma solidity >=0.7.0 <0.9.0;
+pragma solidity ^0.8.0;
 
 contract AddressManagement {
     
@@ -9,14 +9,14 @@ contract AddressManagement {
     mapping (string => address) name2AddressMap;
     mapping (address => string) address2NameMap;
     
-    event AdminChanged(address previousAdmin, address newAdmin);
+    event AddressManagementAdminChanged(address previousAdmin, address newAdmin);
     
     constructor(address admin_) {
-        _setAdmin(admin_);
+        _setAddressManagementAdmin(admin_);
     }
 
     modifier isAdmin() {
-        if (msg.sender == _admin()) {
+        if (msg.sender == _addressManagementAdmin()) {
             _;
         } else {
             revert();
@@ -31,18 +31,18 @@ contract AddressManagement {
         }
     }
     
-    function admin() external view isAdmin returns (address admin_) {
-        admin_ = _admin();
+    function addressManagementAdmin() external view isAdmin virtual returns (address admin_) {
+        admin_ = _addressManagementAdmin();
     }
     
     
-    function changeAdmin(address newAdmin) external virtual isAdmin {
+    function changeAddressManagementAdmin(address newAdmin) external virtual isAdmin {
         require(newAdmin != address(0), "TransparentUpgradableProxy: new admin is address 0");
-        emit AdminChanged(_admin(), newAdmin);
-        _setAdmin(newAdmin);
+        emit AddressManagementAdminChanged(_addressManagementAdmin(), newAdmin);
+        _setAddressManagementAdmin(newAdmin);
     }
     
-    function _setAdmin(address newAdmin) private {
+    function _setAddressManagementAdmin(address newAdmin) private {
         bytes32 slot = ADMIN_SLOT;
         
         assembly {
@@ -50,7 +50,7 @@ contract AddressManagement {
         }
     }
     
-    function _admin() internal view virtual returns(address admin_) {
+    function _addressManagementAdmin() internal view virtual returns(address admin_) {
         bytes32 slot = ADMIN_SLOT;
         
         assembly {
@@ -71,8 +71,7 @@ contract AddressManagement {
         return address2NameMap[contractAddress];
     }
 
-    // For testing
-    function getContractAddress(string memory contractName) external view isOfficialContract returns (address contractAddress) {
+    function getContractAddress(string memory contractName) public view isOfficialContract returns (address contractAddress) {
         return name2AddressMap[contractName];
     }
     

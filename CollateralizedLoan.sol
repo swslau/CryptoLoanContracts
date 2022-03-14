@@ -1,45 +1,27 @@
 // SPDX-License-Identifier: GPL-3.0
 
-pragma solidity >=0.7.0 <0.9.0;
+pragma solidity ^0.8.0;
 
-import './LoanStructure.sol';
+import "./LoanStructure.sol";
+import "./AddressManagement.sol";
 
 /**
  * @title CollateralizedLoan
  * @dev Allow the lending of loan in fiat currency with cryptocurrency as collateral
  */
-contract CollateralizedLoan {
+contract CollateralizedLoan is AddressManagement {
 
-    // address addressManagement;
-
-    // constructor(address _addressManagement) {
-    //     addressManagement = _addressManagement;
-    // }
+    constructor(address admin_) AddressManagement(admin_) { }
     
     /**
      * @dev Trigger the event when agreement of the collateralized loan is made
      */
-    event LoanInitiated(uint256 _loanId, address _lender, uint256 _initiatedime);
+    event LoanInitiated(uint256 _loanId, address _lender, uint256 _initiatedTime);
 
     /**
      * @dev Trigger the event when borrower raised a request for loan
      */
-    event LoanRequested(uint256 _loanId, address _requester, uint256 _initiatedime);
-
-    /**
-     * @dev Trigger the event when agreement of the collateralized loan is made
-     */
-    event LoanAgreed(uint256 _loanId, address _borrower, address _lender, uint256 _agreedTime);
-    
-    /**
-     * @dev Trigger the event when ether is deposited by borrower as collateral
-     */
-    event EtherDepositedACK(uint256 _loanId, address _borrower, uint256 _ethValue, uint256 _ackTime);
-
-    /**
-     * @dev Trigger the event when loan amount is deposited by lender
-     */
-    event LoanDepositedACK(uint256 _loanId, address _lender, uint256 _loanValue, uint256 _ackTime);
+    event LoanRequested(uint256 _loanId, address _requester, uint256 _requestedTime);
 
     /**
      * @dev Trigger the event when the loan is cancelled
@@ -49,57 +31,52 @@ contract CollateralizedLoan {
     /**
      * @dev Trigger the event when loan is disbursed to borrower
      */
-    event LoanDisbursed(uint256 _loanId, address _lender, uint256 _disburseTime);
+    event LoanDisbursed(uint256 _loanId, address _lender, uint256 _nextRepaymentDeadline, uint256 _disburseTime);
 
     /**
      * @dev Trigger the event when repayment is made by the borrower
      */
-    event RepaymentMadeByBorrower(uint256 _loanId, address _borrower, uint256 _repaidTime);
+    event LoanRepaid(uint256 _loanId, address _borrower, uint256 _repaidTime);
 
     /**
      * @dev Trigger the event when borrower defaults on a particular loan
      */
-    event BorrowerDefaults(uint256 _loanId, address _borrower, uint256 _checkTime);
-
-    /**
-     * @dev Trigger the event when borrower defaults and collateralized ether is sent to the lender
-     */
-    event CollateralSentToLender(uint256 _loanId, address _lender, uint256 _sentTime);
+    event LoanDefaulted(uint256 _loanId, address _borrower, uint256 _checkTime);
 
     /**
      * @dev Trigger the event when borrower has fully repaid the loan
      */
-    event FullLoanRepaid(uint256 _loanId, uint256 _checkTime);
+    event LoanFullyRepaid(uint256 _loanId, address _borrower, uint256 _repaidTime);
 
     /**
-     * @dev Trigger the event when collateral is paid back to the borrower
-     */
-    event CollateralPaidback(uint256 _loanId, address _borrower, uint256 _paidTime);
-    
-    /**
-     * @dev Mapping of loan by loanId
+     * @dev loanId => Loan
      */
     mapping(uint256 => LoanStructure.Loan) loanMap;
 
     /**
-     * @dev Mapping of existence of loan by loanId
+     * @dev loanId => loanExistence
      */
     mapping(uint256 => bool) loanExistenceMap;
+
+    /**
+     * @dev lender address => loanId[]
+     */
+    mapping(address => uint256[]) lenderMap;
+
+    /**
+     * @dev borrower address => loanId[]
+     */
+    mapping(address => uint256[]) borrowerMap;
+
+    /**
+     * @dev nextPaymentDeadline => NextPaymentRecord[]
+     */
+    mapping(uint256 => LoanStructure.NextPaymentRecord[]) nextPaymentRecordMap;
 
     /**
      * @dev Count of latest loanId
      */
     uint256 loanCount;
-
-    /**
-     * @dev Mapping of loanIds by lender address
-     */
-    mapping(address => uint256[]) lenderMap;
-
-    /**
-     * @dev Mapping of loanIds by borrower address
-     */
-    mapping(address => uint256[]) borrowerMap;
 
     /**
      * @dev Require the loan to be initiated and processed to a particular stage
@@ -110,13 +87,13 @@ contract CollateralizedLoan {
     }
 
     /**
-     * @dev Require the loan to be initiated and processed before a particular stage
+     * @dev Require the loan to be initiated and processed to a particular stage
      */
     modifier RequireLoanStatusBefore(uint256 _loanId, LoanStructure.LoanStatus _loanStatus) {
-        require(loanExistenceMap[_loanId] && loanMap[_loanId].loanStatus < _loanStatus);
+        require(loanExistenceMap[_loanId] && loanMap[_loanId].loanStatus <= _loanStatus);
         _;
     }
-    
+
     /**
      * @dev Authenticate the address of the sender, see if it is the address of the borrower of a loan
      */
@@ -137,16 +114,22 @@ contract CollateralizedLoan {
      * @dev Authenticate the address of the sender, see if it is coming from the Collateralized Loan Gateway
      */
     modifier AuthenticateSender() {
-        address addressManagement = 0x54698d5ff8C093Cb051631982D12B718b28c95f7;
-        (, bytes memory result) = addressManagement.call(abi.encodeWithSignature("getContractAddress(string)", "CollateralizedLoanGateway"));
-        require(msg.sender == abi.decode(result, (address)));
+        require(msg.sender == super.getContractAddress("CollateralizedLoanGateway"));
         _;
+    }
+
+    /**
+     * @dev Update lastUpdateTime of the loan
+     */
+    modifier UpdateLastUpdateTime(uint256 _loanId, uint256 _lastUpdateTime) {
+        _;
+        loanMap[_loanId].lastUpdateTime = _lastUpdateTime;
     }
     
     /**
      * @dev Initiate the loan offered from lender
      */
-    function initiateLoan(address _lender, uint256 _loanAmount, uint256 _collateralAmount, uint256 _loanTerm, uint256 _apr, uint256 _repaymentSchedule, uint256 _monthlyRepaymentAmount, uint256 _remainingPaymentCount) external
+    function initiateLoan(address _lender, uint256 _loanAmount, uint256 _collateralAmount, uint256 _loanTerm, uint256 _apr, uint256 _repaymentSchedule, uint256 _monthlyRepaymentAmount, uint256 _remainingPaymentCount, uint256 _initialLTV, uint256 _marginLTV, uint256 _liquidationLTV) external
     AuthenticateSender
     returns(uint256)
     {
@@ -157,8 +140,6 @@ contract CollateralizedLoan {
             , collateralAmount: _collateralAmount
             , borrower: address(0)
             , lender: _lender
-            , borrowerAck: false
-            , lenderAck: false
             , loanStatus: LoanStructure.LoanStatus.LoanInitiated
             , loanTerm: _loanTerm
             , apr: _apr
@@ -166,6 +147,9 @@ contract CollateralizedLoan {
             , monthlyRepaymentAmount: _monthlyRepaymentAmount
             , remainingRepaymentCount: _remainingPaymentCount
             , nextRepaymentDeadline: 0
+            , initialLTV: _initialLTV
+            , marginLTV: _marginLTV
+            , liquidationLTV: _liquidationLTV
             , createTime: block.timestamp
             , lastUpdateTime: block.timestamp
         });
@@ -176,10 +160,10 @@ contract CollateralizedLoan {
     }
 
     /**
-     * @dev The agreement on the loan is made between borrower and lender
+     * @dev Borrower requests for the loan
      */
     function requestLoan(address _borrower, uint256 _loanId) external
-    AuthenticateSender RequireLoanStatus(_loanId, LoanStructure.LoanStatus.LoanInitiated)
+    AuthenticateSender RequireLoanStatus(_loanId, LoanStructure.LoanStatus.LoanInitiated) UpdateLastUpdateTime(_loanId, block.timestamp)
     {
         loanMap[_loanId].loanStatus = LoanStructure.LoanStatus.LoanRequested;
         loanMap[_loanId].borrower = _borrower;
@@ -188,111 +172,113 @@ contract CollateralizedLoan {
     }
 
     /**
-     * @dev The agreement on the loan is made between borrower and lender
-     */
-    function agreeLoan(address _lender, uint256 _loanId, address _borrower) external
-    AuthenticateSender AuthenticateLender(_lender, _loanId) RequireLoanStatus(_loanId, LoanStructure.LoanStatus.LoanRequested)
-    {
-        loanMap[_loanId].loanStatus = LoanStructure.LoanStatus.LoanAgreed;
-        emit LoanAgreed(_loanId, _borrower, _lender, block.timestamp);
-    }
-
-    /**
-     * @dev Ether is deposited and the action is acknowledged by the borrower
-     */
-    function ackEthDeposit(address _borrower, uint256 _loanId, uint256 _ethBalance) external
-    AuthenticateSender AuthenticateBorrower(_borrower, _loanId) RequireLoanStatus(_loanId, LoanStructure.LoanStatus.LoanAgreed)
-    {
-        require(_ethBalance >= loanMap[_loanId].collateralAmount);
-        loanMap[_loanId].borrowerAck = true;
-        if(loanMap[_loanId].lenderAck) {
-            loanMap[_loanId].loanStatus = LoanStructure.LoanStatus.LoanAcknowledged;
-        }
-        emit EtherDepositedACK(_loanId, _borrower, _ethBalance, block.timestamp);
-    }
-
-    /**
-     * @dev Loan in fiat money is deposited and the action is acknowledged by the borrower
-     */
-    function ackLoan(address _lender, uint256 _loanId, uint256 _loanValue, uint256 _lenderFiatBalance) external
-    AuthenticateSender AuthenticateLender(_lender, _loanId) RequireLoanStatus(_loanId, LoanStructure.LoanStatus.LoanAgreed)
-    {
-        require(_loanValue >= loanMap[_loanId].loanAmount, "Given loan value does not match the initiated loan amount");
-        require(_lenderFiatBalance >= loanMap[_loanId].loanAmount, "Lender does not have enough fiat balance to acknowledge the loan");
-
-        loanMap[_loanId].lenderAck = true;
-        if(loanMap[_loanId].borrowerAck) {
-            loanMap[_loanId].loanStatus = LoanStructure.LoanStatus.LoanAcknowledged;
-        }
-        emit LoanDepositedACK(_loanId, _lender, _loanValue, block.timestamp);
-    }
-
-    /**
-     * @dev Loan is cancelled due to the disputes between borrower and lender,
-     *      or the deposits are not acknowledged by both borrower and lender before the deadline
+     * @dev Loan is cancelled by the lender
      */
     function cancelLoan(address _lender, uint256 _loanId) external
-    AuthenticateSender AuthenticateLender(_lender, _loanId) RequireLoanStatusBefore(_loanId, LoanStructure.LoanStatus.LoanAcknowledged)
+    AuthenticateSender AuthenticateLender(_lender, _loanId) RequireLoanStatusBefore(_loanId, LoanStructure.LoanStatus.LoanRequested) UpdateLastUpdateTime(_loanId, block.timestamp)
     {
         loanMap[_loanId].loanStatus = LoanStructure.LoanStatus.LoanCancelled;
         emit LoanCancelled(_loanId, _lender, block.timestamp);
     }
 
+    /**
+     * @dev Record the event of loan disbursement
+     */
     function updateDisbursedLoanDetails(address _lender, uint256 _loanId, uint256 _nextRepaymentDeadline) external
+    AuthenticateSender RequireLoanStatus(_loanId, LoanStructure.LoanStatus.LoanRequested) UpdateLastUpdateTime(_loanId, block.timestamp)
     {
         loanMap[_loanId].loanStatus = LoanStructure.LoanStatus.LoanRepaying;
         loanMap[_loanId].nextRepaymentDeadline = _nextRepaymentDeadline;
-        emit LoanDisbursed(_loanId, _lender, block.timestamp);
+        nextPaymentRecordMap[_nextRepaymentDeadline].push(LoanStructure.NextPaymentRecord(_loanId, false));
+        emit LoanDisbursed(_loanId, _lender, _nextRepaymentDeadline, block.timestamp);
     }
 
-    function recordRepaymentEvent(address _borrower, uint256 _loanId) external
+    /**
+     * @dev Get a list of defaulted loanIds by nextRepaymentDeadline in NextPaymentRecord
+     */
+    function getDefaultedLoanIds(uint256 _nextRepaymentDeadline) external view
+    AuthenticateSender
+    returns(uint256[] memory)
     {
-        emit RepaymentMadeByBorrower(_loanId, _borrower, block.timestamp);
+        uint256 defaultedLoanIdCount = 0;
+        LoanStructure.NextPaymentRecord[] storage loanIds = nextPaymentRecordMap[_nextRepaymentDeadline];
+        uint256[] memory candidates = new uint256[](loanIds.length);
+        for(uint256 i = 0; i < loanIds.length; i++) {
+            (uint256 _loanId_, bool _isPaid) = (loanIds[i].loanId, loanIds[i].isPaid);
+            if(!_isPaid) {
+                candidates[defaultedLoanIdCount] = _loanId_;
+                defaultedLoanIdCount += 1;
+            }
+        }
+        uint256[] memory defaultedLoanIds = new uint[](defaultedLoanIdCount);
+        for (uint j = 0; j < defaultedLoanIds.length; j++) {
+            defaultedLoanIds[j] = candidates[j];
+        }
+        return defaultedLoanIds;
     }
 
-    function recordFullRepaymentEvent(uint256 _loanId) external
+    /**
+     * @dev Update the next payment status as paid in NextPaymentRecord
+     */
+    function updateNextPaymentAsPaid(uint256 _loanId) internal
+    UpdateLastUpdateTime(_loanId, block.timestamp)
     {
-        emit FullLoanRepaid(_loanId, block.timestamp);
+        LoanStructure.NextPaymentRecord[] storage loanIds = nextPaymentRecordMap[loanMap[_loanId].nextRepaymentDeadline];
+        for(uint256 i = 0; i < loanIds.length; i++) {
+            (uint256 _loanId_, ) = (loanIds[i].loanId, loanIds[i].isPaid);
+            if(_loanId_ == _loanId) {
+                loanIds[i].isPaid = true;
+                return;
+            }
+        }
     }
 
-    function updateNextLoanRepayment(uint256 _loanId, uint256 _nextRepaymentDeadline) external
-    returns(bool)
+    /**
+     * @dev Update the details of the next loan repayment
+     */
+    function updateNextLoanRepaymentDetails(uint256 _loanId, uint256 _nextRepaymentDeadline) external
+    AuthenticateSender RequireLoanStatus(_loanId, LoanStructure.LoanStatus.LoanRepaying) UpdateLastUpdateTime(_loanId, block.timestamp)
+    returns(bool isFullyRepaid)
     {
+        updateNextPaymentAsPaid(_loanId);
         loanMap[_loanId].remainingRepaymentCount -= 1;
         if(loanMap[_loanId].remainingRepaymentCount == 0) {
-            emit FullLoanRepaid(_loanId, block.timestamp);
+            emit LoanFullyRepaid(_loanId, loanMap[_loanId].borrower, block.timestamp);
             loanMap[_loanId].loanStatus = LoanStructure.LoanStatus.LoanCompleted;
             loanMap[_loanId].nextRepaymentDeadline = 0;
             return true;
         }
         loanMap[_loanId].nextRepaymentDeadline = _nextRepaymentDeadline;
+        nextPaymentRecordMap[_nextRepaymentDeadline].push(LoanStructure.NextPaymentRecord(_loanId, false));
         return false;
-    }
-
-    function recordLoanDefaultEvent(uint256 _loanId) external
-    {
-        loanMap[_loanId].loanStatus = LoanStructure.LoanStatus.LoanDefaulted;
-        emit BorrowerDefaults(_loanId, loanMap[_loanId].borrower, block.timestamp);
-        emit CollateralSentToLender(_loanId, loanMap[_loanId].lender, block.timestamp);
     }
 
     /**
-     * @dev Check whether or not the borrower has defaulted
+     * @dev Record the event of loan default
      */
-    function checkBorrowerDefault(uint256 _loanId) external
-    AuthenticateSender RequireLoanStatus(_loanId, LoanStructure.LoanStatus.LoanRepaying)
-    returns(bool)
+    function recordLoanDefaultEvent(uint256 _loanId) external
+    AuthenticateSender RequireLoanStatus(_loanId, LoanStructure.LoanStatus.LoanRepaying) UpdateLastUpdateTime(_loanId, block.timestamp)
     {
-        if(block.timestamp >= loanMap[_loanId].nextRepaymentDeadline + loanMap[_loanId].repaymentSchedule * 1 days) {
-            return true;
-        }
-        return false;
+        loanMap[_loanId].loanStatus = LoanStructure.LoanStatus.LoanDefaulted;
+        loanMap[_loanId].nextRepaymentDeadline = 0;
+        emit LoanDefaulted(_loanId, loanMap[_loanId].borrower, block.timestamp);
+    }
+
+    /**
+     * @dev Record the event of loan default
+     */
+    function recordLoanFullyRepaidEvent(uint256 _loanId) external
+    AuthenticateSender RequireLoanStatus(_loanId, LoanStructure.LoanStatus.LoanRepaying) UpdateLastUpdateTime(_loanId, block.timestamp)
+    {
+        loanMap[_loanId].loanStatus = LoanStructure.LoanStatus.LoanCompleted;
+        loanMap[_loanId].nextRepaymentDeadline = 0;
+        emit LoanFullyRepaid(_loanId, loanMap[_loanId].borrower, block.timestamp);
     }
 
     /**
      * @dev Get loan details by loanId
      */
-    function getLoanDetails(uint256 _loanId) external
+    function getLoanDetails(uint256 _loanId) external view
     AuthenticateSender
     returns(LoanStructure.Loan memory)
     {
@@ -302,7 +288,7 @@ contract CollateralizedLoan {
     /**
      * @dev Get all the initiated loans by a particular lender (which is the msg.sender)
      */
-    function getLenderLoans(address _lender) external
+    function getLenderLoans(address _lender) external view
     AuthenticateSender
     returns(LoanStructure.Loan[] memory)
     {
@@ -314,26 +300,16 @@ contract CollateralizedLoan {
         return result;
     }
 
-    // /**
-    //  * @dev Get the length of all the initiated loans by a particular lender (which is the msg.sender)
-    //  */
-    // function getLenderLoansLength(address _lender) external
-    // AuthenticateSender
-    // returns(uint256)
-    // {
-    //     return lenderMap[_lender].length;
-    // }
-
     /**
-     * @dev Get all the initiated loans by a particular lender (which is the msg.sender)
+     * @dev Get all the initiated loans by a particular borrower (which is the msg.sender)
      */
-    function getBorrowerLoans(address _lender) external
+    function getBorrowerLoans(address _borrower) external view
     AuthenticateSender
     returns(LoanStructure.Loan[] memory)
     {
-        LoanStructure.Loan[] memory result = new LoanStructure.Loan[](borrowerMap[_lender].length);
-        for (uint i = 0; i < borrowerMap[_lender].length; i++) {
-            LoanStructure.Loan memory initiatedLoan = loanMap[borrowerMap[_lender][i]];
+        LoanStructure.Loan[] memory result = new LoanStructure.Loan[](borrowerMap[_borrower].length);
+        for (uint i = 0; i < borrowerMap[_borrower].length; i++) {
+            LoanStructure.Loan memory initiatedLoan = loanMap[borrowerMap[_borrower][i]];
             result[i] = initiatedLoan;
         }
         return result;
@@ -342,7 +318,7 @@ contract CollateralizedLoan {
     /**
      * @dev Get loan amount of a particular loan agreement
      */
-    function getLoanAmount(uint256 _loanId) external
+    function getLoanAmount(uint256 _loanId) external view
     AuthenticateSender
     returns(uint256)
     {
@@ -352,7 +328,7 @@ contract CollateralizedLoan {
     /**
      * @dev Get collateral amount of a particular loan agreement
      */
-    function getCollateralAmount(uint256 _loanId) external
+    function getCollateralAmount(uint256 _loanId) external view
     AuthenticateSender
     returns(uint256)
     {
@@ -360,7 +336,7 @@ contract CollateralizedLoan {
     }
 
     /* For testing */
-    function add1(uint a, uint b) external
+    function add1(uint a, uint b) external view
     AuthenticateSender
     returns (uint256) {
         return a + b;
