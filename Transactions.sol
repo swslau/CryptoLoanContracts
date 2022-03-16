@@ -75,16 +75,19 @@ contract Transactions is AddressManagement {
     
     /**
      * @dev Balance of Ether (in gas) to be tracked in the smart contract
+     *      wallet address => etherBalance
      */
     mapping(address => uint256) etherBalances;
     
     /**
      * @dev Balance of fiat money to be tracked in the smart contract
+     *      wallet address => fiatBalance
      */
     mapping(address => uint256) fiatBalances;
 
     /**
-     * @dev Place for storing the collateral, loanId => collateralValue
+     * @dev Place for storing the collateral
+     *      loanId => collateralValue
      */
     mapping(uint256 => uint256) collateralVault;
     
@@ -99,7 +102,7 @@ contract Transactions is AddressManagement {
     
     /**
      * @dev Check if the account have enough balance to proceed the transaction in Ether
-     * @param _value Value of Ether to be transferred
+     * @param _value Value of Ether to be transferred (in wei)
      */
     modifier CheckEnoughEtherBalance(uint256 _value) {
         require(etherBalances[msg.sender] >= _value);
@@ -130,6 +133,7 @@ contract Transactions is AddressManagement {
     /**
      * @dev Store Ether to the account if it is created before
      * @param _address Address of the account
+     * @param _value Value of Ether (in wei)
      */
     function storeEther(address _address, uint256 _value) external payable
     AuthenticateSender
@@ -205,6 +209,7 @@ contract Transactions is AddressManagement {
 
     /**
      * @dev Transfer fiat money
+     * @param _from Address of the sender of fiat money
      * @param _to Address of the receiver of fiat money
      * @param _value Value of fiat money to be transferred (in USD)
      */
@@ -221,6 +226,7 @@ contract Transactions is AddressManagement {
 
     /**
      * @dev Transfer fiat money back to bank
+     * @param _requester Address of the requester
      * @param _bankAccountNo Account number of the requester
      * @param _value Value of fiat money to be transferred (in USD)
      */
@@ -250,7 +256,7 @@ contract Transactions is AddressManagement {
      * @dev Transfer Ether to collateral vault
      * @param _address Address of the borrower
      * @param _loanId Id of the loan
-     * @param _collateralAmount Amount of the collateral in wei
+     * @param _collateralAmount Amount of the collateral (in wei)
      */
     function storeCollateralToVault(address _address, uint256 _loanId, uint256 _collateralAmount) external
     AuthenticateSender
@@ -264,7 +270,7 @@ contract Transactions is AddressManagement {
      * @dev Release Ether from collateral vault
      * @param _address Address of the borrower
      * @param _loanId Id of the loan
-     * @param _collateralAmount Amount of the collateral in wei
+     * @param _collateralAmount Amount of the collateral (in wei)
      */
     function releaseCollateralFromVault(address _address, uint256 _loanId, uint256 _collateralAmount) external
     AuthenticateSender

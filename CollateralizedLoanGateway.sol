@@ -20,7 +20,9 @@ contract CollateralizedLoanGateway is AddressManagement {
 
     fallback() external payable {}
 
-    receive() external payable {}
+    receive() external payable {
+        emit EtherReceived(msg.sender, msg.value);
+    }
 
     modifier AuthenticateSender(address _address) {
         if(msg.sender == _address) {
@@ -82,16 +84,6 @@ contract CollateralizedLoanGateway is AddressManagement {
      * @dev Trigger the event when collateral is paid back to the borrower
      */
     event CollateralPaidback(uint256 _loanId, address _borrower, uint256 _paidTime);
-    
-    /**
-     * @dev Trigger the event when Ether balance of an wallet address is initiated
-     */
-    event EtherBalanceInitiated(address _address);
-
-    /**
-     * @dev Trigger the event when Fiat balance of an wallet address is initiated
-     */
-    event FiatBalanceInitiated(address _address);
 
     /**
      * @dev Trigger the event when Ether is stored in the contract
@@ -190,7 +182,7 @@ contract CollateralizedLoanGateway is AddressManagement {
     }
     
     /**
-        Endpoints from CollateralizedLoan
+     * @dev Endpoints from CollateralizedLoan
      */
     function initiateLoan(address _lender, uint256 _loanAmount, uint256 _collateralAmount, uint256 _loanTerm, uint256 _apr, uint256 _repaymentSchedule, uint256 _monthlyRepayment, uint256 _remainingPaymentCount, uint256 _ltv, uint256 _marginLTV, uint256 _liquidationLTV)
     AuthenticateSender(_lender)
@@ -359,7 +351,9 @@ contract CollateralizedLoanGateway is AddressManagement {
         emit LoanFullyRepaid(_loanId, loan.borrower, block.timestamp);
     }
 
-    // Scheduled batch job for liquidating loans
+    /**
+     * @dev Scheduled batch job for liquidating loans
+     */
     function liquidateLoan(uint256[] memory loanIds, uint256[] memory collateralInUSD, uint256[] memory collateralPayables) external
     AuthenticateAirnodeAdmin
     {
@@ -382,9 +376,9 @@ contract CollateralizedLoanGateway is AddressManagement {
                 bytes memory payload4 = abi.encodeWithSignature("storeFiatMoney(address,uint256)", loan.lender, grossRemainingRepaymentAmount);
                 functionCallToTransactionsProxy(payload4);
 
-                bytes memory payload5 = abi.encodeWithSignature("transferEther(address,uint256)", loan.borrower, collateralPayables[i]);
+                bytes memory payload5 = abi.encodeWithSignature("storeEther(address,uint256)", loan.borrower, collateralPayables[i]);
                 functionCallToTransactionsProxy(payload5);
-                emit EtherTransferred(loan.borrower, collateralPayables[i] * 1 wei);
+                emit EtherStored(loan.borrower, collateralPayables[i]);
 
                 bytes memory payload6 = abi.encodeWithSignature("recordLoanFullyRepaidEvent(uint256)", loanIds[i]);
                 functionCallToCollateralizedLoanProxy(payload6);
@@ -431,9 +425,8 @@ contract CollateralizedLoanGateway is AddressManagement {
     }
 
     /**
-        Endpoints from Transactions
+     * @dev Endpoints from Transactions
      */
-
     function storeEther(address payable _address) public payable
     AuthenticateSender(_address)
     {
@@ -459,7 +452,10 @@ contract CollateralizedLoanGateway is AddressManagement {
         emit EtherWithdrawn(_address, _value);
     }
 
-    // Trigger when the user requested transfer fund to bank
+
+    /**
+     * @dev Trigger when the user requested transfer fund to bank
+     */
     function withdrawFiatMoney(address _address, uint256 _value) external
     AuthenticateAirnodeAdmin
     {
@@ -492,7 +488,9 @@ contract CollateralizedLoanGateway is AddressManagement {
         emit FiatMoneyTransferredToBank(_requester, _bankAccountNo, _value);
     }
 
-    // Trigger when the loan is defaulted
+    /**
+     * @dev Trigger when the loan is defaulted
+     */
     function transferEther(address payable _lender, uint256 _value) public
     AuthenticateAirnodeAdmin
     {
@@ -501,13 +499,15 @@ contract CollateralizedLoanGateway is AddressManagement {
         emit EtherTransferred(_lender, _value * 1 wei);
     }
 
-    /* For testing */
-    function add1() external returns (uint256) {
+    /**
+     * @dev For authentication testing
+     */
+    function add1() external isAdmin returns (uint256) {
         bytes memory payload = abi.encodeWithSignature("add1(uint256,uint256)", 3, 5);
         return abi.decode(functionCallToCollateralizedLoanProxy(payload), (uint256));
     }
 
-    function add2() external returns (uint256) {
+    function add2() external isAdmin returns (uint256) {
         bytes memory payload = abi.encodeWithSignature("add2(uint256,uint256)", 2, 4);
         return abi.decode(functionCallToTransactionsProxy(payload), (uint256));
     }
