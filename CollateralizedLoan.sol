@@ -16,37 +16,47 @@ contract CollateralizedLoan is AddressManagement {
     /**
      * @dev Trigger the event when agreement of the collateralized loan is made
      */
-    event LoanInitiated(uint256 _loanId, address _lender, uint256 _initiatedTime);
+    event LoanInitiated(uint256 indexed _loanId, address indexed _lender, uint256 _initiatedTime);
 
     /**
      * @dev Trigger the event when borrower raised a request for loan
      */
-    event LoanRequested(uint256 _loanId, address _requester, uint256 _requestedTime);
+    event LoanRequested(uint256 indexed _loanId, address indexed _requester, uint256 _requestedTime);
 
     /**
      * @dev Trigger the event when the loan is cancelled
      */
-    event LoanCancelled(uint256 _loanId, address _lender, uint256 _cancelTime);
+    event LoanCancelled(uint256 indexed _loanId, address indexed _lender, uint256 _cancelTime);
 
     /**
      * @dev Trigger the event when loan is disbursed to borrower
      */
-    event LoanDisbursed(uint256 _loanId, address _lender, uint256 _nextRepaymentDeadline, uint256 _disburseTime);
+    event LoanDisbursed(uint256 indexed _loanId, address indexed _lender, uint256 _nextRepaymentDeadline, uint256 _disburseTime);
 
     /**
      * @dev Trigger the event when repayment is made by the borrower
      */
-    event LoanRepaid(uint256 _loanId, address _borrower, uint256 _repaidTime);
+    event LoanRepaid(uint256 indexed _loanId, address indexed _borrower, uint256 _repaidTime);
 
     /**
      * @dev Trigger the event when borrower defaults on a particular loan
      */
-    event LoanDefaulted(uint256 _loanId, address _borrower, uint256 _checkTime);
+    event LoanDefaulted(uint256 indexed _loanId, address indexed _borrower, uint256 _checkTime);
+
+    /**
+     * @dev Trigger the event when borrower defaults and collateralized ether is sent to the lender
+     */
+    event CollateralSentToLender(uint256 indexed _loanId, address indexed _lender, uint256 _sentTime);
 
     /**
      * @dev Trigger the event when borrower has fully repaid the loan
      */
-    event LoanFullyRepaid(uint256 _loanId, address _borrower, uint256 _repaidTime);
+    event LoanFullyRepaid(uint256 indexed _loanId, address indexed _borrower, uint256 _repaidTime);
+
+    /**
+     * @dev Trigger the event when collateral is paid back to the borrower
+     */
+    event CollateralPaidback(uint256 indexed _loanId, address indexed _borrower, uint256 _paidTime);
 
     /**
      * @dev loanId => Loan
@@ -129,7 +139,7 @@ contract CollateralizedLoan is AddressManagement {
     /**
      * @dev Initiate the loan offered from lender
      */
-    function initiateLoan(address _lender, uint256 _loanAmount, uint256 _collateralAmount, uint256 _loanTerm, uint256 _apr, uint256 _repaymentSchedule, uint256 _monthlyRepaymentAmount, uint256 _remainingPaymentCount, uint256 _initialLTV, uint256 _marginLTV, uint256 _liquidationLTV) external
+    function initiateLoan(address _lender, uint32 _loanAmount, uint256 _collateralAmount, uint16 _loanTerm, uint16 _apr, uint16 _repaymentSchedule, uint32 _monthlyRepaymentAmount, uint16 _remainingPaymentCount, uint8 _initialLTV, uint8 _marginLTV, uint8 _liquidationLTV) external
     AuthenticateSender
     returns(uint256)
     {
@@ -336,10 +346,14 @@ contract CollateralizedLoan is AddressManagement {
     }
 
     /* For testing */
-    function add1(uint a, uint b) external view
+    function add1(uint8 a, uint8 b) external view
     AuthenticateSender
-    returns (uint256) {
+    returns (uint8) {
         return a + b;
+    }
+
+    function updateLoanRemainingRepaymentCount(uint256 _loanId, uint16 _remainingCount) external isAdmin {
+        loanMap[_loanId].remainingRepaymentCount = _remainingCount;
     }
 
 }

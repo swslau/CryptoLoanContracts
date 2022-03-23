@@ -7,9 +7,7 @@ import "./AddressManagement.sol";
 
 contract TransactionsProxy is TransparentUpgradeableProxy, AddressManagement {
     constructor(address _logic, address admin_, bytes memory _data) TransparentUpgradeableProxy(_logic, admin_, _data) AddressManagement(admin_) { }
-    
-    receive() external payable override {}
-    
+        
     function _beforeFallback() internal virtual override {
         require(msg.sender != _admin(), "TransactionsProxy: Admin cannot fallback to proxy target");
         super._beforeFallback();

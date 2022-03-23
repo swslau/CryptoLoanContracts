@@ -12,66 +12,56 @@ import "./AddressManagement.sol";
 contract Transactions is AddressManagement {
 
     constructor(address admin_) AddressManagement(admin_) { }
-    
-    /**
-     * @dev Trigger the event when Ether balance of an wallet address is initiated
-     */
-    event EtherBalanceInitiated(address _address);
-
-    /**
-     * @dev Trigger the event when Fiat balance of an wallet address is initiated
-     */
-    event FiatBalanceInitiated(address _address);
 
     /**
      * @dev Trigger the event when Ether is stored in the contract
      */
-    event EtherStored(address _address, uint256 _value);
+    event EtherStored(address indexed _address, uint256 _value);
 
     /**
      * @dev Trigger the event when fiat money is stored in the contract
      */
-    event FiatMoneyStored(address _address, uint256 _value);
+    event FiatMoneyStored(address indexed _address, uint256 _value);
 
     /**
      * @dev Trigger the event when Ether is withdrawn in the contract
      */
-    event EtherWithdrawn(address _address, uint256 _value);
+    event EtherWithdrawn(address indexed _address, uint256 _value);
 
     /**
      * @dev Trigger the event when fiat money is withdrawn in the contract
      */
-    event FiatMoneyWithdrawn(address _address, uint256 _value);
+    event FiatMoneyWithdrawn(address indexed _address, uint256 _value);
 
     /**
      * @dev Trigger the event when Ether is successfully transferred
      */
-    event EtherReceived(address _from, uint256 _value);
+    event EtherReceived(address indexed _from, uint256 _value);
     
     /**
      * @dev Trigger the event when fiat money is successfully transferred from one to another address
      */
-    event FiatMoneyTransferredBetweenAddress(address _from, address _to, uint256 _value);
+    event FiatMoneyTransferredBetweenAddress(address indexed _from, address indexed _to, uint256 _value);
     
     /**
      * @dev Trigger the event when fiat money is successfully transferred from one to another address
      */
-    event FiatMoneyTransferredToBank(address _address, string _bankAccountNo, uint256 _value);
+    event FiatMoneyTransferredToBank(address indexed _address, string indexed _bankAccountNo, uint256 _value);
     
     /**
      * @dev Trigger the event when Ether is successfully transferred
      */
-    event EtherTransferred(address _to, uint256 _value);
+    event EtherTransferred(address indexed _to, uint256 _value);
 
     /**
      * @dev Trigger the event when collateral is stored in vault
      */
-    event EtherCollateralized(address _address, uint256 _loanId, uint256 _value);
+    event EtherCollateralized(address indexed _address, uint256 indexed _loanId, uint256 _value);
 
     /**
      * @dev Trigger the event when collateral is released from vault
      */
-    event EtherReleasedFromVault(address _address, uint256 _loanId, uint256 _value);
+    event EtherReleasedFromVault(address indexed _address, uint256 indexed _loanId, uint256 _value);
     
     /**
      * @dev Balance of Ether (in gas) to be tracked in the smart contract
@@ -135,7 +125,7 @@ contract Transactions is AddressManagement {
      * @param _address Address of the account
      * @param _value Value of Ether (in wei)
      */
-    function storeEther(address _address, uint256 _value) external payable
+    function storeEther(address _address, uint256 _value) external
     AuthenticateSender
     {
         etherBalances[_address] += _value;
@@ -164,7 +154,11 @@ contract Transactions is AddressManagement {
     {
         if(etherBalances[_address] >= _value) {
             etherBalances[_address] -= _value;
-            transferEther(_address, _value);
+            
+            // This line is necessary if this contract is used standalone
+            // but since gateway is used, the ether is locked there instead of here
+            // transferEther(_address, _value);
+
             emit EtherWithdrawn(_address, _value);
         } else {
             revert("withdrawEther: Not enough Ether balance in the address");
@@ -303,9 +297,9 @@ contract Transactions is AddressManagement {
     }
 
     /* For testing */
-    function add2(uint a, uint b) external view
+    function add2(uint8 a, uint8 b) external view
     AuthenticateSender
-    returns (uint256) {
+    returns (uint8) {
         return a + b;
     }
 }
