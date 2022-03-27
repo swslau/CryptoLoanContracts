@@ -270,6 +270,7 @@ contract CollateralizedLoan is AddressManagement {
     AuthenticateSender RequireLoanStatus(_loanId, LoanStructure.LoanStatus.LoanRepaying) UpdateLastUpdateTime(_loanId, block.timestamp)
     {
         loanMap[_loanId].loanStatus = LoanStructure.LoanStatus.LoanDefaulted;
+        loanMap[_loanId].remainingRepaymentCount = 0;
         loanMap[_loanId].nextRepaymentDeadline = 0;
         emit LoanDefaulted(_loanId, loanMap[_loanId].borrower, block.timestamp);
     }
@@ -281,7 +282,9 @@ contract CollateralizedLoan is AddressManagement {
     AuthenticateSender RequireLoanStatus(_loanId, LoanStructure.LoanStatus.LoanRepaying) UpdateLastUpdateTime(_loanId, block.timestamp)
     {
         loanMap[_loanId].loanStatus = LoanStructure.LoanStatus.LoanCompleted;
+        loanMap[_loanId].remainingRepaymentCount = 0;
         loanMap[_loanId].nextRepaymentDeadline = 0;
+        updateNextPaymentAsPaid(_loanId);
         emit LoanFullyRepaid(_loanId, loanMap[_loanId].borrower, block.timestamp);
     }
 
