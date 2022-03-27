@@ -272,6 +272,7 @@ contract CollateralizedLoan is AddressManagement {
         loanMap[_loanId].loanStatus = LoanStructure.LoanStatus.LoanDefaulted;
         loanMap[_loanId].remainingRepaymentCount = 0;
         loanMap[_loanId].nextRepaymentDeadline = 0;
+        updateNextPaymentAsPaid(_loanId);
         emit LoanDefaulted(_loanId, loanMap[_loanId].borrower, block.timestamp);
     }
 
